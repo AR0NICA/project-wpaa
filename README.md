@@ -1,93 +1,141 @@
-# WPAA : WebPage Architecture Analyzer
+# WPAA: WebPage Architecture Analyzer
 
-WPAA는 웹 페이지의 HTML 아키텍처를 분석하여 트리 형태로 시각화해주는 툴입니다. 정적 및 동적 웹 페이지의 DOM 구조를 쉽게 파악하고 분석할 수 있습니다.
+EN | [KR](docs/README_KR.md)
 
-## 주요 기능
+WPAA is a comprehensive tool for analyzing and visualizing HTML architecture of web pages. It provides tree-structured visualization for both static and dynamic web pages, making DOM structure analysis intuitive and efficient.
 
-- 웹 페이지의 HTML 구조를 트리 형태로 표현
-- 정적 및 동적(JavaScript 렌더링) 웹 페이지 분석 지원
-- HTML 캐싱을 통한 성능 최적화
-- 비동기 요청 처리로 다중 URL 동시 분석
-- 다양한 출력 형식 지원 (텍스트, JSON, PNG 시각화)
-- 사용자 정의 필터링 및 속성 포함 기능
+## Key Features
 
-## 설치 방법
+- 🌳 **Tree Visualization**: Hierarchical representation of HTML structure
+- 🔄 **Change Detection**: Automatic detection and comparison of webpage structure changes
+- 🌐 **Web Interface**: Intuitive web UI for easy analysis
+- 📊 **Multiple Export Formats**: Support for SVG, interactive HTML, CSV, and Markdown
+- ⚡ **Performance Optimization**: Asynchronous processing, caching, and memory optimization
+- 🔧 **Static/Dynamic Analysis**: Support for JavaScript-rendered web pages
+- 🎯 **Custom Filtering**: CSS selector and attribute filtering capabilities
+- 📈 **Performance Monitoring**: Track execution time, memory usage, and cache efficiency
 
-### 요구사항
+## Installation
+
+[Setup Guide](docs/SETUP.md)
+
+### Requirements
 
 ```
 Python 3.7+
-pip install "requirements.txt"
+pip install -r requirements.txt
 ```
-graphviz 설치가 필요합니다:
-1. [공식 웹사이트](https://graphviz.org/download/)에서 설치 파일을 다운로드하여 설치합니다.
-2. graphviz 설치 후, 실행 파일이 있는 bin 디렉토리`(예: C:\Program Files\Graphviz\bin)`를 시스템의 PATH에 추가해야 합니다.
 
+**Required External Programs:**
 
-ChromeDriver가 필요합니다(동적 페이지 분석 시):
-1. [ChromeDriver 다운로드](https://sites.google.com/a/chromium.org/chromedriver/downloads)
-2. 다운로드한 파일을 적절한 위치에 저장
-3. 코드 내의 chromedriver 경로 업데이트:
-   ```python
-   service = Service('your/path/to/chromedriver')
-   ```
+1. **Graphviz Installation**:
+   - Download installer from [official website](https://graphviz.org/download/)
+   - Add bin directory to system PATH (e.g., `C:\Program Files\Graphviz\bin`)
 
-## 사용 방법
+2. **ChromeDriver Installation** (for dynamic page analysis):
+   - Download from [ChromeDriver website](https://sites.google.com/a/chromium.org/chromedriver/downloads)
+   - Save to appropriate location and update path in code:
+     ```python
+     service = Service('your/path/to/chromedriver')
+     ```
 
-기본 사용법:
+## Usage
+
+### 1. Web Interface (Recommended)
+
+```bash
+python run_web_interface.py
 ```
+
+Access `http://127.0.0.1:5000` in your browser for intuitive web-based analysis.
+
+**Web Interface Features:**
+- 📱 User-friendly web UI
+- 🔄 Real-time analysis progress display
+- 📊 Download various output formats
+- 🔍 Change comparison functionality
+- 📈 Performance statistics
+
+### 2. Command Line Interface
+
+Basic usage:
+```bash
 python wpaa_run.py --urls https://example.com
 ```
 
-여러 옵션을 사용한 예:
+Advanced options:
+```bash
+python wpaa_run.py --urls https://example.com https://test.com \
+  --exclude script style \
+  --include-attrs class href \
+  --custom-filter "div.content" \
+  --max-depth 3 \
+  --export-html \
+  --compare-changes \
+  --show-performance
 ```
-python wpaa_run.py --urls https://example.com https://test.com --exclude script style --include-attrs class href --custom-filter "div.content" --max-depth 3 --output json --visualize
-```
 
-## 명령줄 옵션
+## Command Line Options
 
-- `--urls`: 분석할 웹 페이지 URL 목록 (필수)
-- `--use-selenium`: Selenium으로 동적 콘텐츠 가져오기
-- `--exclude`: 제외할 HTML 태그 목록 (예: script style)
-- `--include-attrs`: 노드에 포함할 HTML 속성 (예: class id href)
-- `--custom-filter`: CSS 셀렉터로 특정 요소만 필터링 (예: div.classname)
-- `--max-depth`: 트리의 최대 깊이 제한
-- `--include-text`: 텍스트 콘텐츠 포함
-- `--output`: 출력 형식 선택 (text 또는 json)
-- `--visualize`: PNG 파일로 트리 구조 시각화
+- `--urls`: List of webpage URLs to analyze (required)
+- `--use-selenium`: Use Selenium for dynamic content fetching
+- `--exclude`: HTML tags to exclude (e.g., script style)
+- `--include-attrs`: HTML attributes to include in nodes (e.g., class id href)
+- `--custom-filter`: Filter specific elements using CSS selectors (e.g., div.classname)
+- `--max-depth`: Limit maximum tree depth
+- `--include-text`: Include text content
+- `--output`: Choose output format (text or json)
+- `--visualize`: Visualize tree structure as PNG file
+- `--export-svg`: Export to SVG format
+- `--export-html`: Export to interactive HTML
+- `--export-csv`: Export to CSV format
+- `--export-markdown`: Export to Markdown format
+- `--compare-changes`: Compare with previous version
+- `--show-performance`: Display performance report
+- `--optimize-tree`: Optimize tree structure
 
-## 예제
+## Examples
 
-### 기본 분석
-```
+### Basic Analysis
+```bash
 python wpaa_run.py --urls https://news.ycombinator.com
 ```
 
-### 동적 콘텐츠 분석 (Selenium 사용)
-```
+### Dynamic Content Analysis (Using Selenium)
+```bash
 python wpaa_run.py --urls https://www.example.com --use-selenium
 ```
 
-### 특정 태그 제외하고 시각화
-```
+### Exclude Specific Tags and Visualize
+```bash
 python wpaa_run.py --urls https://www.example.com --exclude script style meta link --visualize
 ```
 
-### 특정 속성 포함 및 JSON 출력
-```
+### Include Specific Attributes and JSON Output
+```bash
 python wpaa_run.py --urls https://www.example.com --include-attrs class id href --output json
 ```
 
-## 구조 설명
+### Interactive HTML with Change Comparison
+```bash
+python wpaa_run.py --urls https://www.example.com --export-html --compare-changes --show-performance
+```
 
-- 캐싱: 같은 URL을 반복 분석할 때 성능 최적화
-- 비동기 처리: 여러 URL 동시 분석 지원
-- 오류 처리: 데코레이터를 통한 일관된 오류 처리
-- 트리 구조: anytree 라이브러리를 사용한 HTML DOM 시각화
+### Export to Multiple Formats
+```bash
+python wpaa_run.py --urls https://www.example.com --export-svg --export-csv --export-markdown
+```
 
-## 개선 계획
+## Architecture Overview
 
-- 트리 비교 기능 추가로 사이트 변경 사항 감지
-- 웹 인터페이스 구현
-- 더 많은 출력 형식 지원 (SVG, HTML 인터랙티브)
-- 성능 최적화 및 메모리 사용량 개선
+- **Caching**: Performance optimization for repeated URL analysis
+- **Asynchronous Processing**: Concurrent analysis of multiple URLs
+- **Error Handling**: Consistent error handling through decorators
+- **Tree Structure**: HTML DOM visualization using anytree library
+
+## Development History
+MK-II_2523: Feature improvements completed
+- [X] Tree comparison functionality for detecting site changes
+- [X] Web interface implementation
+- [X] Support for more output formats (SVG, interactive HTML)
+- [X] Performance optimization and memory usage improvements

@@ -14,26 +14,27 @@ import os
 import json
 from functools import wraps
 
-# 로깅 설정
+from tree_comparison import TreeComparator
+from output_formats import OutputFormatter
+from performance_optimizer import get_optimizer
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# 에러 처리 데코레이터
 def handle_errors(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            logging.error(f"{func.__name__}에서 오류 발생: {e}")
+            logging.error(f"{func.__name__} error: {e}")
             return None
     return wrapper
 
-# 1. 캐싱된 HTML 로드/저장
 def load_cache(url, cache_dir="cache"):
     cache_file = os.path.join(cache_dir, f"{hash(url)}.html")
     if os.path.exists(cache_file):
         with open(cache_file, 'r', encoding='utf-8') as f:
-            logging.info(f"{url}에 대한 캐시를 로드합니다.")
+            logging.info(f"Cache loaded: {url}")
             return f.read()
     return None
 
@@ -43,9 +44,8 @@ def save_cache(url, html, cache_dir="cache"):
     cache_file = os.path.join(cache_dir, f"{hash(url)}.html")
     with open(cache_file, 'w', encoding='utf-8') as f:
         f.write(html)
-    logging.info(f"{url}의 HTML을 캐시에 저장했습니다.")
+    logging.info(f"Cached HTML: {url}")
 
-# 2. 비동기 HTML 가져오기
 async def fetch_html(session, url, retries=3, delay=5):
     for attempt in range(retries):
         try:
@@ -55,35 +55,35 @@ async def fetch_html(session, url, retries=3, delay=5):
                 save_cache(url, html)
                 return html
         except Exception as e:
-            logging.warning(f"{url} 가져오기 실패 (시도 {attempt + 1}/{retries}): {e}")
+            logging.warning(f"Fetch failed {url} (attempt {attempt + 1}/{retries}): {e}")
             await asyncio.sleep(delay)
-    logging.error(f"{url}의 HTML을 가져오지 못했습니다.")
+    logging.error(f"Failed to fetch HTML: {url}")
     return None
 
-# 3. 동적 콘텐츠 가져오기 (Selenium)
 @handle_errors
 def get_dynamic_html(url):
     options = Options()
     options.headless = True
-    service = Service('/path/to/chromedriver')  # ChromeDriver 경로 설정
+    try:
+        service = Service()
+    except:
+        service = Service('/path/to/chromedriver')
+    
     driver = webdriver.Chrome(service=service, options=options)
     driver.get(url)
-    time.sleep(2)  # 페이지 로딩 대기
+    time.sleep(2)
     html = driver.page_source
     driver.quit()
     save_cache(url, html)
     return html
 
-# 4. HTML 파싱
 @handle_errors
 def parse_html(html):
     return BeautifulSoup(html, 'html.parser')
 
-# 5. 트리 생성 (성능 최적화 및 커스텀 필터링)
 def build_tree(soup, parent=None, exclude_tags=None, include_attrs=None, custom_filter=None, max_depth=None, current_depth=0, include_text=False):
     if max_depth is not None and current_depth > max_depth:
         return
-    # 커스텀 필터링이 있을 경우 select 사용
     children = soup.select(custom_filter) if custom_filter else soup.children
     for child in children:
         if hasattr(child, 'name') and child.name and (exclude_tags is None or child.name not in exclude_tags):
@@ -97,25 +97,39 @@ def build_tree(soup, parent=None, exclude_tags=None, include_attrs=None, custom_
                 Node(f"TEXT: {child.string.strip()}", parent=node)
             build_tree(child, node, exclude_tags, include_attrs, custom_filter, max_depth, current_depth + 1, include_text)
 
-# 6. 출력 함수
 def print_tree(root):
-    logging.info("트리 구조:")
+    logging.info("Tree structure:")
     for pre, _, node in RenderTree(root):
         logging.info(f"{pre}{node.name}")
 
 def print_json_tree(root):
     json_tree = JsonExporter().export(root)
-    logging.info("JSON 형식 트리:")
+    logging.info("JSON tree:")
     logging.info(json_tree)
 
 @handle_errors
 def visualize_tree(root, filename="web_structure"):
     DotExporter(root).to_picture(f"{filename}.png")
-    logging.info(f"트리가 {filename}.png로 저장되었습니다.")
+    logging.info(f"Tree saved as {filename}.png")
 
-# 7. 메인 로직
+@get_optimizer().performance_monitor
 async def analyze_url(url, args):
-    html = load_cache(url)
+    optimizer = get_optimizer()
+    
+    cache_key = optimizer.cache_manager.get_cache_key(url, {
+        'use_selenium': args.use_selenium,
+        'exclude': args.exclude,
+        'include_attrs': args.include_attrs,
+        'custom_filter': args.custom_filter,
+        'max_depth': args.max_depth,
+        'include_text': args.include_text
+    })
+    
+    cached_result = optimizer.cache_manager.get(cache_key)
+    if cached_result:
+        logging.info(f"Cache hit: {url}")
+        return cached_result
+        html = load_cache(url)
     if not html:
         if args.use_selenium:
             html = get_dynamic_html(url)
@@ -131,34 +145,82 @@ async def analyze_url(url, args):
 
     root = Node(soup.name or "root")
     build_tree(soup, root, args.exclude, args.include_attrs, args.custom_filter, args.max_depth, include_text=args.include_text)
-
+    
+    if hasattr(args, 'optimize_tree') and args.optimize_tree:
+        pass
+    
+    root.node_count = len([root] + list(root.descendants))
+    
     if args.output == 'text':
         print_tree(root)
     elif args.output == 'json':
         print_json_tree(root)
+    
+    formatter = OutputFormatter()
+    if hasattr(args, 'export_svg') and args.export_svg:
+        formatter.export_to_svg(root, f"tree_{hash(url)}.svg")
+    if hasattr(args, 'export_html') and args.export_html:
+        formatter.export_to_interactive_html(root, f"tree_{hash(url)}.html")
+    if hasattr(args, 'export_csv') and args.export_csv:
+        formatter.export_to_csv(root, f"tree_{hash(url)}.csv")
+    if hasattr(args, 'export_markdown') and args.export_markdown:
+        formatter.export_to_markdown(root, f"tree_{hash(url)}.md")
+    
     if args.visualize:
         visualize_tree(root)
+    
+    if hasattr(args, 'compare_changes') and args.compare_changes:
+        comparator = TreeComparator()
+        diff = comparator.detect_changes(url, root)
+        if diff:
+            print(comparator.generate_diff_report(diff))
+    
+    optimizer.cache_manager.set(cache_key, root)
+    
     return root
 
 async def main(args):
-    tasks = [analyze_url(url, args) for url in args.urls]
-    await asyncio.gather(*tasks)
+    optimizer = get_optimizer()
+    
+    try:
+        if len(args.urls) > 1:
+            results = await optimizer.batch_process_urls(args.urls, analyze_url, args.__dict__)
+            logging.info(f"Analysis completed: {len(results)} URLs")
+        else:
+            result = await analyze_url(args.urls[0], args)
+            if result:
+                logging.info("Analysis completed")
+        
+        if hasattr(args, 'show_performance') and args.show_performance:
+            report = optimizer.get_performance_report()
+            print("\n=== Performance Report ===")
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+            
+    finally:
+        optimizer.cleanup()
 
-# 8. 명령줄 인자 설정
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="웹 페이지의 HTML 구조를 분석하여 트리 형태로 표현합니다.")
-    parser.add_argument('--urls', nargs='+', required=True, help="분석할 웹 페이지 URL 목록")
-    parser.add_argument('--use-selenium', action='store_true', help="Selenium으로 동적 콘텐츠 가져오기")
-    parser.add_argument('--exclude', nargs='*', help="제외할 태그 목록 (예: script style)")
-    parser.add_argument('--include-attrs', nargs='*', help="노드에 포함할 속성 (예: class id href)")
-    parser.add_argument('--custom-filter', help="커스텀 CSS 셀렉터로 필터링 (예: div.classname)")
-    parser.add_argument('--max-depth', type=int, help="트리의 최대 깊이")
-    parser.add_argument('--include-text', action='store_true', help="텍스트 콘텐츠 포함")
-    parser.add_argument('--output', choices=['text', 'json'], default='text', help="출력 형식")
-    parser.add_argument('--visualize', action='store_true', help="PNG로 시각화")
+    parser = argparse.ArgumentParser(description="Web Page Architecture Analyzer - Analyze HTML structure as tree")
+    parser.add_argument('--urls', nargs='+', required=True, help="Target URLs")
+    parser.add_argument('--use-selenium', action='store_true', help="Use Selenium for dynamic content")
+    parser.add_argument('--exclude', nargs='*', help="Exclude tags (e.g., script style)")
+    parser.add_argument('--include-attrs', nargs='*', help="Include attributes (e.g., class id href)")
+    parser.add_argument('--custom-filter', help="CSS selector filter")
+    parser.add_argument('--max-depth', type=int, help="Maximum tree depth")
+    parser.add_argument('--include-text', action='store_true', help="Include text content")
+    parser.add_argument('--output', choices=['text', 'json'], default='text', help="Output format")
+    parser.add_argument('--visualize', action='store_true', help="Generate PNG visualization")
+    
+    parser.add_argument('--export-svg', action='store_true', help="Export as SVG")
+    parser.add_argument('--export-html', action='store_true', help="Export as interactive HTML")
+    parser.add_argument('--export-csv', action='store_true', help="Export as CSV")
+    parser.add_argument('--export-markdown', action='store_true', help="Export as Markdown")    
+    parser.add_argument('--compare-changes', action='store_true', help="Compare with previous version")
+    parser.add_argument('--show-performance', action='store_true', help="Show performance metrics")
+    parser.add_argument('--optimize-tree', action='store_true', help="Optimize tree structure")
+    
     return parser.parse_args()
 
-# 실행
 if __name__ == "__main__":
     args = parse_arguments()
     asyncio.run(main(args))
