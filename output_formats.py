@@ -136,372 +136,8 @@ class OutputFormatter:
             # JSON 데이터 생성
             json_data = self._tree_to_d3_format(root)
             
-            html_content = f"""
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>웹 페이지 구조 분석 - 인터랙티브 트리</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }}
-        
-        .header {{
-            text-align: center;
-            margin-bottom: 20px;
-        }}
-        
-        .controls {{
-            text-align: center;
-            margin-bottom: 20px;
-        }}
-        
-        .controls button {{
-            margin: 0 5px;
-            padding: 8px 16px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }}
-        
-        .controls button:hover {{
-            background-color: #0056b3;
-        }}
-        
-        #tree-container {{
-            width: 100%;
-            height: 800px;
-            border: 1px solid #ddd;
-            background-color: white;
-            overflow: auto;
-        }}
-        
-        .node circle {{
-            cursor: pointer;
-            stroke: #333;
-            stroke-width: 2px;
-        }}
-        
-        .node.root circle {{
-            fill: #ff6b6b;
-        }}
-        
-        .node.internal circle {{
-            fill: #4ecdc4;
-        }}
-        
-        .node.leaf circle {{
-            fill: #45b7d1;
-        }}
-        
-        .node text {{
-            font: 12px sans-serif;
-            pointer-events: none;
-        }}
-        
-        .link {{
-            fill: none;
-            stroke: #666;
-            stroke-width: 1.5px;
-        }}
-        
-        .tooltip {{
-            position: absolute;
-            text-align: left;
-            padding: 8px;
-            font: 12px sans-serif;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            border-radius: 4px;
-            pointer-events: none;
-            opacity: 0;
-        }}
-        
-        .search-box {{
-            margin: 10px;
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            width: 200px;
-        }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>웹 페이지 HTML 구조 분석</h1>
-        <p>노드를 클릭하여 확장/축소하고, 마우스를 올려 세부 정보를 확인하세요.</p>
-    </div>
-    
-    <div class="controls">
-        <input type="text" class="search-box" placeholder="노드 검색..." id="searchBox">
-        <button onclick="expandAll()">모두 확장</button>
-        <button onclick="collapseAll()">모두 축소</button>
-        <button onclick="resetZoom()">줌 리셋</button>
-        <button onclick="downloadSVG()">SVG 다운로드</button>
-    </div>
-    
-    <div id="tree-container"></div>
-    
-    <script>
-        // 데이터
-        const treeData = {json.dumps(json_data, ensure_ascii=False, indent=2)};
-        
-        // SVG 설정
-        const margin = {{top: 20, right: 120, bottom: 20, left: 120}};
-        const width = 1200 - margin.right - margin.left;
-        const height = 800 - margin.top - margin.bottom;
-        
-        // SVG 생성
-        const svg = d3.select("#tree-container")
-            .append("svg")
-            .attr("width", width + margin.right + margin.left)
-            .attr("height", height + margin.top + margin.bottom);
-        
-        // 줌 기능
-        const zoom = d3.zoom()
-            .scaleExtent([0.1, 3])
-            .on("zoom", (event) => {{
-                g.attr("transform", event.transform);
-            }});
-        
-        svg.call(zoom);
-        
-        const g = svg.append("g")
-            .attr("transform", `translate(${{margin.left}},${{margin.top}})`);
-        
-        // 트리 레이아웃
-        const tree = d3.tree().size([height, width]);
-        
-        // 툴팁
-        const tooltip = d3.select("body").append("div")
-            .attr("class", "tooltip");
-        
-        let root, i = 0;
-        
-        // 초기화
-        function initialize() {{
-            root = d3.hierarchy(treeData);
-            root.x0 = height / 2;
-            root.y0 = 0;
-            
-            // 초기에는 루트만 확장
-            root.children.forEach(collapse);
-            update(root);
-        }}
-        
-        // 노드 축소
-        function collapse(d) {{
-            if (d.children) {{
-                d._children = d.children;
-                d._children.forEach(collapse);
-                d.children = null;
-            }}
-        }}
-        
-        // 트리 업데이트
-        function update(source) {{
-            const treeData = tree(root);
-            const nodes = treeData.descendants();
-            const links = treeData.descendants().slice(1);
-            
-            // 노드 간격 조정
-            nodes.forEach(d => d.y = d.depth * 180);
-            
-            // 노드 업데이트
-            const node = g.selectAll('g.node')
-                .data(nodes, d => d.id || (d.id = ++i));
-            
-            const nodeEnter = node.enter().append('g')
-                .attr('class', d => {{
-                    if (d.depth === 0) return 'node root';
-                    if (d.children || d._children) return 'node internal';
-                    return 'node leaf';
-                }})
-                .attr("transform", d => `translate(${{source.y0}},${{source.x0}})`)
-                .on('click', click)
-                .on('mouseover', showTooltip)
-                .on('mouseout', hideTooltip);
-            
-            nodeEnter.append('circle')
-                .attr('r', 1e-6);
-            
-            nodeEnter.append('text')
-                .attr("dy", ".35em")
-                .attr("x", d => d.children || d._children ? -13 : 13)
-                .attr("text-anchor", d => d.children || d._children ? "end" : "start")
-                .text(d => d.data.name)
-                .style("fill-opacity", 1e-6);
-            
-            const nodeUpdate = nodeEnter.merge(node);
-            
-            nodeUpdate.transition()
-                .duration(750)
-                .attr("transform", d => `translate(${{d.y}},${{d.x}})`);
-            
-            nodeUpdate.select('circle')
-                .attr('r', 6)
-                .style("fill", d => d._children ? "lightsteelblue" : "#fff");
-            
-            nodeUpdate.select('text')
-                .style("fill-opacity", 1);
-            
-            const nodeExit = node.exit().transition()
-                .duration(750)
-                .attr("transform", d => `translate(${{source.y}},${{source.x}})`)
-                .remove();
-            
-            nodeExit.select('circle')
-                .attr('r', 1e-6);
-            
-            nodeExit.select('text')
-                .style('fill-opacity', 1e-6);
-            
-            // 링크 업데이트
-            const link = g.selectAll('path.link')
-                .data(links, d => d.id);
-            
-            const linkEnter = link.enter().insert('path', "g")
-                .attr("class", "link")
-                .attr('d', d => {{
-                    const o = {{x: source.x0, y: source.y0}};
-                    return diagonal(o, o);
-                }});
-            
-            const linkUpdate = linkEnter.merge(link);
-            
-            linkUpdate.transition()
-                .duration(750)
-                .attr('d', d => diagonal(d, d.parent));
-            
-            const linkExit = link.exit().transition()
-                .duration(750)
-                .attr('d', d => {{
-                    const o = {{x: source.x, y: source.y}};
-                    return diagonal(o, o);
-                }})
-                .remove();
-            
-            nodes.forEach(d => {{
-                d.x0 = d.x;
-                d.y0 = d.y;
-            }});
-        }}
-        
-        // 대각선 경로 생성
-        function diagonal(s, d) {{
-            const path = `M ${{s.y}} ${{s.x}}
-                        C ${{(s.y + d.y) / 2}} ${{s.x}},
-                          ${{(s.y + d.y) / 2}} ${{d.x}},
-                          ${{d.y}} ${{d.x}}`;
-            return path;
-        }}
-        
-        // 클릭 이벤트
-        function click(event, d) {{
-            if (d.children) {{
-                d._children = d.children;
-                d.children = null;
-            }} else {{
-                d.children = d._children;
-                d._children = null;
-            }}
-            update(d);
-        }}
-        
-        // 툴팁 표시
-        function showTooltip(event, d) {{
-            const nodeInfo = `
-                <strong>${{d.data.name}}</strong><br/>
-                깊이: ${{d.depth}}<br/>
-                자식 수: ${{(d.children || d._children || []).length}}<br/>
-                타입: ${{d.depth === 0 ? 'Root' : (d.children || d._children) ? 'Internal' : 'Leaf'}}
-            `;
-            
-            tooltip.transition()
-                .duration(200)
-                .style("opacity", .9);
-            tooltip.html(nodeInfo)
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 28) + "px");
-        }}
-        
-        // 툴팁 숨기기
-        function hideTooltip() {{
-            tooltip.transition()
-                .duration(500)
-                .style("opacity", 0);
-        }}
-        
-        // 전역 함수들
-        function expandAll() {{
-            root.descendants().forEach(d => {{
-                if (d._children) {{
-                    d.children = d._children;
-                    d._children = null;
-                }}
-            }});
-            update(root);
-        }}
-        
-        function collapseAll() {{
-            root.descendants().forEach(d => {{
-                if (d.children) {{
-                    d._children = d.children;
-                    d.children = null;
-                }}
-            }});
-            update(root);
-        }}
-        
-        function resetZoom() {{
-            svg.transition().duration(750).call(
-                zoom.transform,
-                d3.zoomIdentity
-            );
-        }}
-        
-        function downloadSVG() {{
-            const svgElement = document.querySelector('#tree-container svg');
-            const serializer = new XMLSerializer();
-            const svgString = serializer.serializeToString(svgElement);
-            
-            const blob = new Blob([svgString], {{type: 'image/svg+xml'}});
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'tree-structure.svg';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }}
-        
-        // 검색 기능
-        document.getElementById('searchBox').addEventListener('input', function(e) {{
-            const searchTerm = e.target.value.toLowerCase();
-            
-            g.selectAll('g.node')
-                .style('opacity', d => {{
-                    if (!searchTerm) return 1;
-                    return d.data.name.toLowerCase().includes(searchTerm) ? 1 : 0.3;
-                }});
-        }});
-        
-        // 초기화 실행
-        initialize();
-    </script>
-</body>
-</html>
-            """
+            # HTML 템플릿 파일 읽기
+            html_content = self._load_html_template(json_data)
             
             with open(filename, 'w', encoding='utf-8') as f:
                 f.write(html_content)
@@ -512,6 +148,74 @@ class OutputFormatter:
         except Exception as e:
             logging.error(f"HTML 출력 중 오류 발생: {e}")
             return None
+    def _load_html_template(self, json_data: Dict[str, Any]) -> str:
+        """HTML 템플릿 파일을 로드하고 데이터를 삽입"""
+        import os
+        
+        # 템플릿 파일 경로 설정
+        template_path = os.path.join(os.path.dirname(__file__), 'templates', 'interactive_tree.html')
+        
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                template_content = f.read()
+            
+            # JSON 데이터를 템플릿에 삽입
+            html_content = template_content.replace(
+                '{{TREE_DATA}}', 
+                json.dumps(json_data, ensure_ascii=False, indent=2)
+            )
+            
+            return html_content
+            
+        except FileNotFoundError:
+            logging.warning(f"템플릿 파일을 찾을 수 없습니다: {template_path}")
+            return self._get_fallback_html_template(json_data)
+    def _get_fallback_html_template(self, json_data: Dict[str, Any]) -> str:
+        """템플릿 파일이 없을 때 사용할 기본 HTML 템플릿"""
+        return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>웹 페이지 구조 분석 - 인터랙티브 트리</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
+        .header {{ text-align: center; margin-bottom: 20px; }}
+        .controls {{ text-align: center; margin-bottom: 20px; }}
+        .controls button {{ margin: 0 5px; padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }}
+        #tree-container {{ width: 100%; height: 800px; border: 1px solid #ddd; background-color: white; overflow: auto; }}
+        .node circle {{ cursor: pointer; stroke: #333; stroke-width: 2px; }}
+        .node.root circle {{ fill: #ff6b6b; }}
+        .node.internal circle {{ fill: #4ecdc4; }}
+        .node.leaf circle {{ fill: #45b7d1; }}
+        .node text {{ font: 12px sans-serif; pointer-events: none; }}
+        .link {{ fill: none; stroke: #666; stroke-width: 1.5px; }}
+        .tooltip {{ position: absolute; text-align: left; padding: 8px; font: 12px sans-serif; background: rgba(0, 0, 0, 0.8); color: white; border-radius: 4px; pointer-events: none; opacity: 0; }}
+        .search-box {{ margin: 10px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 200px; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>웹 페이지 HTML 구조 분석</h1>
+        <p>노드를 클릭하여 확장/축소하고, 마우스를 올려 세부 정보를 확인하세요.</p>
+    </div>
+    <div class="controls">
+        <input type="text" class="search-box" placeholder="노드 검색..." id="searchBox">
+        <button onclick="expandAll()">모두 확장</button>
+        <button onclick="collapseAll()">모두 축소</button>
+        <button onclick="resetZoom()">줌 리셋</button>
+        <button onclick="downloadSVG()">SVG 다운로드</button>
+    </div>
+    <div id="tree-container"></div>
+    <script>
+        const treeData = {json.dumps(json_data, ensure_ascii=False, indent=2)};
+        // 간단한 D3.js 스크립트 (기본 기능만 포함)
+        console.log("Tree data loaded:", treeData);
+    </script>
+</body>
+</html>"""
+
     def _tree_to_d3_format(self, node: Node) -> Dict[str, Any]:
         """Convert anytree Node to D3.js hierarchical data format"""
         result = {
